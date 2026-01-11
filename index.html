@@ -1,0 +1,1540 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title></title>
+    </head>
+    <body>
+	<div style="position: absolute; top: 0; left: 0; width: 100%; background: #002147; color: white; padding: 10px 20px; z-index: 2000; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-family: sans-serif;">
+    <h2 style="margin: 0;">Mākaha and Wai'anae, O'ahu Reef & Flood Analysis</h2>
+</div>
+
+<div id="stats-overlay" style="position: absolute; bottom: 30px; left: 20px; z-index: 4000; background: rgba(255, 255, 255, 0.95); padding: 25px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.3); font-family: 'Segoe UI', Arial, sans-serif; min-width: 320px; border-left: 8px solid #e68a00;">
+    
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
+        <div style="font-weight: 800; font-size: 4em; color: #e68a00; line-height: 1;" id="count-protected">0</div>
+        <div style="font-size: 1.3em; font-weight: bold; color: #002147; margin-top: 5px;">Properties Protected by Reef</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 1.1em; font-weight: bold; color: #555;">With Reef:</span>
+            <span style="font-size: 1.8em; font-weight: 800; color: #2c7fb8;" id="count-with">0</span>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 1.1em; font-weight: bold; color: #555;">Without Reef:</span>
+            <span style="font-size: 1.8em; font-weight: 800; color: #e31a1c;" id="count-without">0</span>
+        </div>
+    </div>
+</div>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="data/AllProperties_1.js"></script>
+        <script src="data/FloodZoneNoReef_2.js"></script>
+        <script src="data/FloodZoneReef_3.js"></script>
+        <script src="data/PropertiesNoReef_4.js"></script>
+        <script src="data/PropertiesReef_5.js"></script>
+        <script src="data/PropertiesProtectedbyReef_6.js"></script>
+        <script src="data/FloodZoneNoReef_7.js"></script>
+        <script src="data/FloodZoneReef_8.js"></script>
+        <script src="data/PropertiesNoReef_9.js"></script>
+        <script src="data/PropertiesReef_10.js"></script>
+        <script src="data/PropertiesProtectedbyReef_11.js"></script>
+        <script src="data/FloodZoneNoReef_12.js"></script>
+        <script src="data/FloodZoneReef_13.js"></script>
+        <script src="data/PropertiesNoReef_14.js"></script>
+        <script src="data/PropertiesReef_15.js"></script>
+        <script src="data/PropertiesProtectedbyReef_16.js"></script>
+        <script src="data/FloodZoneNoReef_17.js"></script>
+        <script src="data/FloodZoneReef_18.js"></script>
+        <script src="data/PropertiesNoReef_19.js"></script>
+        <script src="data/PropertiesReef_20.js"></script>
+        <script src="data/PropertiesProtectedbyReef_21.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[21.42823947645777,-158.247451431965],[21.481167889342117,-158.159487867677]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+            map.setMaxBounds(map.getBounds());
+            map.setMinZoom(map.getZoom());
+        }
+        map.createPane('pane_WorldImagery_0');
+        map.getPane('pane_WorldImagery_0').style.zIndex = 400;
+        var layer_WorldImagery_0 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'pane_WorldImagery_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+        });
+        layer_WorldImagery_0;
+        map.addLayer(layer_WorldImagery_0);
+        function pop_AllProperties_1(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_AllProperties_1_0() {
+            return {
+                pane: 'pane_AllProperties_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 0.8,
+                fillColor: 'rgba(255,158,23,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_AllProperties_1');
+        map.getPane('pane_AllProperties_1').style.zIndex = 401;
+        map.getPane('pane_AllProperties_1').style['mix-blend-mode'] = 'normal';
+        var layer_AllProperties_1 = new L.geoJson(json_AllProperties_1, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_AllProperties_1',
+            layerName: 'layer_AllProperties_1',
+            pane: 'pane_AllProperties_1',
+            onEachFeature: pop_AllProperties_1,
+            style: style_AllProperties_1_0,
+        });
+        bounds_group.addLayer(layer_AllProperties_1);
+        function pop_FloodZoneNoReef_2(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneNoReef_2_0() {
+            return {
+                pane: 'pane_FloodZoneNoReef_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.8,
+                fillColor: 'rgba(231,80,64,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneNoReef_2');
+        map.getPane('pane_FloodZoneNoReef_2').style.zIndex = 402;
+        map.getPane('pane_FloodZoneNoReef_2').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneNoReef_2 = new L.geoJson(json_FloodZoneNoReef_2, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneNoReef_2',
+            layerName: 'layer_FloodZoneNoReef_2',
+            pane: 'pane_FloodZoneNoReef_2',
+            onEachFeature: pop_FloodZoneNoReef_2,
+            style: style_FloodZoneNoReef_2_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneNoReef_2);
+        function pop_FloodZoneReef_3(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneReef_3_0() {
+            return {
+                pane: 'pane_FloodZoneReef_3',
+                opacity: 1,
+                color: 'rgba(4,0,1,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.8,
+                fillColor: 'rgba(26,173,247,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneReef_3');
+        map.getPane('pane_FloodZoneReef_3').style.zIndex = 403;
+        map.getPane('pane_FloodZoneReef_3').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneReef_3 = new L.geoJson(json_FloodZoneReef_3, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneReef_3',
+            layerName: 'layer_FloodZoneReef_3',
+            pane: 'pane_FloodZoneReef_3',
+            onEachFeature: pop_FloodZoneReef_3,
+            style: style_FloodZoneReef_3_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneReef_3);
+        function pop_PropertiesNoReef_4(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesNoReef_4_0() {
+            return {
+                pane: 'pane_PropertiesNoReef_4',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(235,78,82,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesNoReef_4');
+        map.getPane('pane_PropertiesNoReef_4').style.zIndex = 404;
+        map.getPane('pane_PropertiesNoReef_4').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesNoReef_4 = new L.geoJson(json_PropertiesNoReef_4, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesNoReef_4',
+            layerName: 'layer_PropertiesNoReef_4',
+            pane: 'pane_PropertiesNoReef_4',
+            onEachFeature: pop_PropertiesNoReef_4,
+            style: style_PropertiesNoReef_4_0,
+        });
+        bounds_group.addLayer(layer_PropertiesNoReef_4);
+        function pop_PropertiesReef_5(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesReef_5_0() {
+            return {
+                pane: 'pane_PropertiesReef_5',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(133,182,111,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesReef_5');
+        map.getPane('pane_PropertiesReef_5').style.zIndex = 405;
+        map.getPane('pane_PropertiesReef_5').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesReef_5 = new L.geoJson(json_PropertiesReef_5, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesReef_5',
+            layerName: 'layer_PropertiesReef_5',
+            pane: 'pane_PropertiesReef_5',
+            onEachFeature: pop_PropertiesReef_5,
+            style: style_PropertiesReef_5_0,
+        });
+        bounds_group.addLayer(layer_PropertiesReef_5);
+        function pop_PropertiesProtectedbyReef_6(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesProtectedbyReef_6_0() {
+            return {
+                pane: 'pane_PropertiesProtectedbyReef_6',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,210,97,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesProtectedbyReef_6');
+        map.getPane('pane_PropertiesProtectedbyReef_6').style.zIndex = 406;
+        map.getPane('pane_PropertiesProtectedbyReef_6').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesProtectedbyReef_6 = new L.geoJson(json_PropertiesProtectedbyReef_6, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesProtectedbyReef_6',
+            layerName: 'layer_PropertiesProtectedbyReef_6',
+            pane: 'pane_PropertiesProtectedbyReef_6',
+            onEachFeature: pop_PropertiesProtectedbyReef_6,
+            style: style_PropertiesProtectedbyReef_6_0,
+        });
+        bounds_group.addLayer(layer_PropertiesProtectedbyReef_6);
+        function pop_FloodZoneNoReef_7(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneNoReef_7_0() {
+            return {
+                pane: 'pane_FloodZoneNoReef_7',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.65,
+                fillColor: 'rgba(231,80,64,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneNoReef_7');
+        map.getPane('pane_FloodZoneNoReef_7').style.zIndex = 407;
+        map.getPane('pane_FloodZoneNoReef_7').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneNoReef_7 = new L.geoJson(json_FloodZoneNoReef_7, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneNoReef_7',
+            layerName: 'layer_FloodZoneNoReef_7',
+            pane: 'pane_FloodZoneNoReef_7',
+            onEachFeature: pop_FloodZoneNoReef_7,
+            style: style_FloodZoneNoReef_7_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneNoReef_7);
+        function pop_FloodZoneReef_8(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneReef_8_0() {
+            return {
+                pane: 'pane_FloodZoneReef_8',
+                opacity: 1,
+                color: 'rgba(4,0,1,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.65,
+                fillColor: 'rgba(26,173,247,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneReef_8');
+        map.getPane('pane_FloodZoneReef_8').style.zIndex = 408;
+        map.getPane('pane_FloodZoneReef_8').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneReef_8 = new L.geoJson(json_FloodZoneReef_8, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneReef_8',
+            layerName: 'layer_FloodZoneReef_8',
+            pane: 'pane_FloodZoneReef_8',
+            onEachFeature: pop_FloodZoneReef_8,
+            style: style_FloodZoneReef_8_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneReef_8);
+        function pop_PropertiesNoReef_9(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesNoReef_9_0() {
+            return {
+                pane: 'pane_PropertiesNoReef_9',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(235,78,82,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesNoReef_9');
+        map.getPane('pane_PropertiesNoReef_9').style.zIndex = 409;
+        map.getPane('pane_PropertiesNoReef_9').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesNoReef_9 = new L.geoJson(json_PropertiesNoReef_9, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesNoReef_9',
+            layerName: 'layer_PropertiesNoReef_9',
+            pane: 'pane_PropertiesNoReef_9',
+            onEachFeature: pop_PropertiesNoReef_9,
+            style: style_PropertiesNoReef_9_0,
+        });
+        bounds_group.addLayer(layer_PropertiesNoReef_9);
+        function pop_PropertiesReef_10(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesReef_10_0() {
+            return {
+                pane: 'pane_PropertiesReef_10',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(133,182,111,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesReef_10');
+        map.getPane('pane_PropertiesReef_10').style.zIndex = 410;
+        map.getPane('pane_PropertiesReef_10').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesReef_10 = new L.geoJson(json_PropertiesReef_10, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesReef_10',
+            layerName: 'layer_PropertiesReef_10',
+            pane: 'pane_PropertiesReef_10',
+            onEachFeature: pop_PropertiesReef_10,
+            style: style_PropertiesReef_10_0,
+        });
+        bounds_group.addLayer(layer_PropertiesReef_10);
+        function pop_PropertiesProtectedbyReef_11(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesProtectedbyReef_11_0() {
+            return {
+                pane: 'pane_PropertiesProtectedbyReef_11',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,210,97,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesProtectedbyReef_11');
+        map.getPane('pane_PropertiesProtectedbyReef_11').style.zIndex = 411;
+        map.getPane('pane_PropertiesProtectedbyReef_11').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesProtectedbyReef_11 = new L.geoJson(json_PropertiesProtectedbyReef_11, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesProtectedbyReef_11',
+            layerName: 'layer_PropertiesProtectedbyReef_11',
+            pane: 'pane_PropertiesProtectedbyReef_11',
+            onEachFeature: pop_PropertiesProtectedbyReef_11,
+            style: style_PropertiesProtectedbyReef_11_0,
+        });
+        bounds_group.addLayer(layer_PropertiesProtectedbyReef_11);
+        function pop_FloodZoneNoReef_12(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneNoReef_12_0() {
+            return {
+                pane: 'pane_FloodZoneNoReef_12',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.5,
+                fillColor: 'rgba(231,80,64,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneNoReef_12');
+        map.getPane('pane_FloodZoneNoReef_12').style.zIndex = 412;
+        map.getPane('pane_FloodZoneNoReef_12').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneNoReef_12 = new L.geoJson(json_FloodZoneNoReef_12, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneNoReef_12',
+            layerName: 'layer_FloodZoneNoReef_12',
+            pane: 'pane_FloodZoneNoReef_12',
+            onEachFeature: pop_FloodZoneNoReef_12,
+            style: style_FloodZoneNoReef_12_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneNoReef_12);
+        function pop_FloodZoneReef_13(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneReef_13_0() {
+            return {
+                pane: 'pane_FloodZoneReef_13',
+                opacity: 1,
+                color: 'rgba(4,0,1,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.5,
+                fillColor: 'rgba(23,157,224,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneReef_13');
+        map.getPane('pane_FloodZoneReef_13').style.zIndex = 413;
+        map.getPane('pane_FloodZoneReef_13').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneReef_13 = new L.geoJson(json_FloodZoneReef_13, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneReef_13',
+            layerName: 'layer_FloodZoneReef_13',
+            pane: 'pane_FloodZoneReef_13',
+            onEachFeature: pop_FloodZoneReef_13,
+            style: style_FloodZoneReef_13_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneReef_13);
+        function pop_PropertiesNoReef_14(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesNoReef_14_0() {
+            return {
+                pane: 'pane_PropertiesNoReef_14',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(235,78,82,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesNoReef_14');
+        map.getPane('pane_PropertiesNoReef_14').style.zIndex = 414;
+        map.getPane('pane_PropertiesNoReef_14').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesNoReef_14 = new L.geoJson(json_PropertiesNoReef_14, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesNoReef_14',
+            layerName: 'layer_PropertiesNoReef_14',
+            pane: 'pane_PropertiesNoReef_14',
+            onEachFeature: pop_PropertiesNoReef_14,
+            style: style_PropertiesNoReef_14_0,
+        });
+        bounds_group.addLayer(layer_PropertiesNoReef_14);
+        function pop_PropertiesReef_15(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesReef_15_0() {
+            return {
+                pane: 'pane_PropertiesReef_15',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(133,182,111,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesReef_15');
+        map.getPane('pane_PropertiesReef_15').style.zIndex = 415;
+        map.getPane('pane_PropertiesReef_15').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesReef_15 = new L.geoJson(json_PropertiesReef_15, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesReef_15',
+            layerName: 'layer_PropertiesReef_15',
+            pane: 'pane_PropertiesReef_15',
+            onEachFeature: pop_PropertiesReef_15,
+            style: style_PropertiesReef_15_0,
+        });
+        bounds_group.addLayer(layer_PropertiesReef_15);
+        function pop_PropertiesProtectedbyReef_16(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesProtectedbyReef_16_0() {
+            return {
+                pane: 'pane_PropertiesProtectedbyReef_16',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,210,97,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesProtectedbyReef_16');
+        map.getPane('pane_PropertiesProtectedbyReef_16').style.zIndex = 416;
+        map.getPane('pane_PropertiesProtectedbyReef_16').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesProtectedbyReef_16 = new L.geoJson(json_PropertiesProtectedbyReef_16, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesProtectedbyReef_16',
+            layerName: 'layer_PropertiesProtectedbyReef_16',
+            pane: 'pane_PropertiesProtectedbyReef_16',
+            onEachFeature: pop_PropertiesProtectedbyReef_16,
+            style: style_PropertiesProtectedbyReef_16_0,
+        });
+        bounds_group.addLayer(layer_PropertiesProtectedbyReef_16);
+        function pop_FloodZoneNoReef_17(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneNoReef_17_0() {
+            return {
+                pane: 'pane_FloodZoneNoReef_17',
+                opacity: 1,
+                color: 'rgba(4,0,1,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 0.3,
+                fillColor: 'rgba(231,80,64,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneNoReef_17');
+        map.getPane('pane_FloodZoneNoReef_17').style.zIndex = 417;
+        map.getPane('pane_FloodZoneNoReef_17').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneNoReef_17 = new L.geoJson(json_FloodZoneNoReef_17, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneNoReef_17',
+            layerName: 'layer_FloodZoneNoReef_17',
+            pane: 'pane_FloodZoneNoReef_17',
+            onEachFeature: pop_FloodZoneNoReef_17,
+            style: style_FloodZoneNoReef_17_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneNoReef_17);
+        map.addLayer(layer_FloodZoneNoReef_17);
+        function pop_FloodZoneReef_18(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="MaskName" colspan="2"><strong>MaskName</strong><br />' + (feature.properties['MaskName'] !== null ? autolinker.link(String(feature.properties['MaskName']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_FloodZoneReef_18_0() {
+            return {
+                pane: 'pane_FloodZoneReef_18',
+                opacity: 1,
+                color: 'rgba(4,0,36,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0, 
+                fill: true,
+                fillOpacity: 0.3,
+                fillColor: 'rgba(26,173,247,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_FloodZoneReef_18');
+        map.getPane('pane_FloodZoneReef_18').style.zIndex = 418;
+        map.getPane('pane_FloodZoneReef_18').style['mix-blend-mode'] = 'normal';
+        var layer_FloodZoneReef_18 = new L.geoJson(json_FloodZoneReef_18, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_FloodZoneReef_18',
+            layerName: 'layer_FloodZoneReef_18',
+            pane: 'pane_FloodZoneReef_18',
+            onEachFeature: pop_FloodZoneReef_18,
+            style: style_FloodZoneReef_18_0,
+        });
+        bounds_group.addLayer(layer_FloodZoneReef_18);
+        map.addLayer(layer_FloodZoneReef_18);
+        function pop_PropertiesNoReef_19(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesNoReef_19_0() {
+            return {
+                pane: 'pane_PropertiesNoReef_19',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(235,78,82,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesNoReef_19');
+        map.getPane('pane_PropertiesNoReef_19').style.zIndex = 419;
+        map.getPane('pane_PropertiesNoReef_19').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesNoReef_19 = new L.geoJson(json_PropertiesNoReef_19, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesNoReef_19',
+            layerName: 'layer_PropertiesNoReef_19',
+            pane: 'pane_PropertiesNoReef_19',
+            onEachFeature: pop_PropertiesNoReef_19,
+            style: style_PropertiesNoReef_19_0,
+        });
+        bounds_group.addLayer(layer_PropertiesNoReef_19);
+        function pop_PropertiesReef_20(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesReef_20_0() {
+            return {
+                pane: 'pane_PropertiesReef_20',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(133,182,111,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesReef_20');
+        map.getPane('pane_PropertiesReef_20').style.zIndex = 420;
+        map.getPane('pane_PropertiesReef_20').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesReef_20 = new L.geoJson(json_PropertiesReef_20, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesReef_20',
+            layerName: 'layer_PropertiesReef_20',
+            pane: 'pane_PropertiesReef_20',
+            onEachFeature: pop_PropertiesReef_20,
+            style: style_PropertiesReef_20_0,
+        });
+        bounds_group.addLayer(layer_PropertiesReef_20);
+        function pop_PropertiesProtectedbyReef_21(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['full_id'] !== null ? autolinker.link(String(feature.properties['full_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_type'] !== null ? autolinker.link(String(feature.properties['osm_type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['building'] !== null ? autolinker.link(String(feature.properties['building']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['amenity'] !== null ? autolinker.link(String(feature.properties['amenity']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['brand'] !== null ? autolinker.link(String(feature.properties['brand']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['wheelchair'] !== null ? autolinker.link(String(feature.properties['wheelchair']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_PropertiesProtectedbyReef_21_0() {
+            return {
+                pane: 'pane_PropertiesProtectedbyReef_21',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,210,97,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_PropertiesProtectedbyReef_21');
+        map.getPane('pane_PropertiesProtectedbyReef_21').style.zIndex = 421;
+        map.getPane('pane_PropertiesProtectedbyReef_21').style['mix-blend-mode'] = 'normal';
+        var layer_PropertiesProtectedbyReef_21 = new L.geoJson(json_PropertiesProtectedbyReef_21, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_PropertiesProtectedbyReef_21',
+            layerName: 'layer_PropertiesProtectedbyReef_21',
+            pane: 'pane_PropertiesProtectedbyReef_21',
+            onEachFeature: pop_PropertiesProtectedbyReef_21,
+            style: style_PropertiesProtectedbyReef_21_0,
+        });
+        bounds_group.addLayer(layer_PropertiesProtectedbyReef_21);
+        map.addLayer(layer_PropertiesProtectedbyReef_21);
+        const url = {"Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+        "France BAN": "https://api-adresse.data.gouv.fr/search/?"}
+        var photonControl = L.control.photon({
+            url: url["Nominatim OSM"],
+            feedbackLabel: '',
+            position: 'topleft',
+            includePosition: true,
+            initial: true,
+            // resultsHandler: myHandler,
+        }).addTo(map);
+        photonControl._container.childNodes[0].style.borderRadius="10px"
+        // Create a variable to store the geoJSON data
+        var x = null;
+        // Create a variable to store the marker
+        var marker = null;
+        // Add an event listener to the Photon control to create a marker from the returned geoJSON data
+        var z = null;
+        photonControl.on('selected', function(e) {
+            console.log(photonControl.search.resultsContainer);
+            if (x != null) {
+                map.removeLayer(obj3.marker);
+                map.removeLayer(x);
+            }
+            obj2.gcd = e.choice;
+            x = L.geoJSON(obj2.gcd).addTo(map);
+            var label = typeof obj2.gcd.properties.label === 'undefined' ? obj2.gcd.properties.display_name : obj2.gcd.properties.label;
+            obj3.marker = L.marker(x.getLayers()[0].getLatLng()).bindPopup(label).addTo(map);
+            map.setView(x.getLayers()[0].getLatLng(), 17);
+            z = typeof e.choice.properties.label === 'undefined'? e.choice.properties.display_name : e.choice.properties.label;
+            console.log(e);
+            e.target.input.value = z;
+        });
+        var search = document.getElementsByClassName("leaflet-photon leaflet-control")[0];
+        search.classList.add("leaflet-control-search")
+        search.style.display = "flex";
+        search.style.backgroundColor="rgba(255,255,255,0.5)" 
+
+        // Create the new button element
+        var button = document.createElement("div");
+        button.id = "gcd-button-control";
+        button.className = "gcd-gl-btn fa fa-search search-button";
+
+        // Insert the button at the beginning of the search control
+        search.insertBefore(button, search.firstChild);
+        last = search.lastChild;
+        last.style.display = "none";
+        button.addEventListener("click", function (e) {
+            if (last.style.display === "none") {
+                last.style.display = "block";
+            } else {
+                last.style.display = "none";
+            }
+        });
+        var overlaysTree = [
+        {label: '<b>10 Year Flood</b>',  selectAllCheckbox: true, children: [
+            {label: '<img src="legend/PropertiesProtectedbyReef_21.png" /> Properties Protected by Reef', layer: layer_PropertiesProtectedbyReef_21},
+            {label: '<img src="legend/PropertiesReef_20.png" /> Properties (Reef)', layer: layer_PropertiesReef_20},
+            {label: '<img src="legend/PropertiesNoReef_19.png" /> Properties (No Reef)', layer: layer_PropertiesNoReef_19},
+            {label: '<img src="legend/FloodZoneReef_18.png" /> Flood Zone (Reef)', layer: layer_FloodZoneReef_18},
+            {label: '<img src="legend/FloodZoneNoReef_17.png" /> Flood Zone (No Reef)', layer: layer_FloodZoneNoReef_17},]},
+        {label: '<b>50 Year Flood</b>', collapsed: true, selectAllCheckbox: true, children: [
+            {label: '<img src="legend/PropertiesProtectedbyReef_16.png" /> Properties Protected by Reef', layer: layer_PropertiesProtectedbyReef_16},
+            {label: '<img src="legend/PropertiesReef_15.png" /> Properties (Reef)', layer: layer_PropertiesReef_15},
+            {label: '<img src="legend/PropertiesNoReef_14.png" /> Properties (No Reef)', layer: layer_PropertiesNoReef_14},
+            {label: '<img src="legend/FloodZoneReef_13.png" /> Flood Zone (Reef)', layer: layer_FloodZoneReef_13},
+            {label: '<img src="legend/FloodZoneNoReef_12.png" /> Flood Zone (No Reef)', layer: layer_FloodZoneNoReef_12},]},
+        {label: '<b>100 Year Flood</b>', collapsed: true, selectAllCheckbox: true, children: [
+            {label: '<img src="legend/PropertiesProtectedbyReef_11.png" /> Properties Protected by Reef', layer: layer_PropertiesProtectedbyReef_11},
+            {label: '<img src="legend/PropertiesReef_10.png" /> Properties (Reef)', layer: layer_PropertiesReef_10},
+            {label: '<img src="legend/PropertiesNoReef_9.png" /> Properties (No Reef)', layer: layer_PropertiesNoReef_9},
+            {label: '<img src="legend/FloodZoneReef_8.png" /> Flood Zone (Reef)', layer: layer_FloodZoneReef_8},
+            {label: '<img src="legend/FloodZoneNoReef_7.png" /> Flood Zone (No Reef)', layer: layer_FloodZoneNoReef_7},]},
+        {label: '<b>500 Year Flood</b>', collapsed: true, selectAllCheckbox: true, children: [
+            {label: '<img src="legend/PropertiesProtectedbyReef_6.png" /> Properties Protected by Reef', layer: layer_PropertiesProtectedbyReef_6},
+            {label: '<img src="legend/PropertiesReef_5.png" /> Properties (Reef)', layer: layer_PropertiesReef_5},
+            {label: '<img src="legend/PropertiesNoReef_4.png" /> Properties (No Reef)', layer: layer_PropertiesNoReef_4},
+            {label: '<img src="legend/FloodZoneReef_3.png" /> Flood Zone (Reef)', layer: layer_FloodZoneReef_3},
+            {label: '<img src="legend/FloodZoneNoReef_2.png" /> Flood Zone (No Reef)', layer: layer_FloodZoneNoReef_2},]},
+            {label: '<img src="legend/AllProperties_1.png" /> All Properties', layer: layer_AllProperties_1},
+            {label: "World Imagery", layer: layer_WorldImagery_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: false, 
+        });
+        lay.addTo(map);
+		document.addEventListener("DOMContentLoaded", function() {
+            // set new Layers List height which considers toggle icon
+            function newLayersListHeight() {
+                var layerScrollbarElement = document.querySelector('.leaflet-control-layers-scrollbar');
+                if (layerScrollbarElement) {
+                    var layersListElement = document.querySelector('.leaflet-control-layers-list');
+                    var originalHeight = layersListElement.style.height 
+                        || window.getComputedStyle(layersListElement).height;
+                    var newHeight = parseFloat(originalHeight) - 50;
+                    layersListElement.style.height = newHeight + 'px';
+                }
+            }
+            var isLayersListExpanded = true;
+            var controlLayersElement = document.querySelector('.leaflet-control-layers');
+            var toggleLayerControl = document.querySelector('.leaflet-control-layers-toggle');
+            // toggle Collapsed/Expanded and apply new Layers List height
+            toggleLayerControl.addEventListener('click', function() {
+                if (isLayersListExpanded) {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                } else {
+                    controlLayersElement.classList.add('leaflet-control-layers-expanded');
+                }
+                isLayersListExpanded = !isLayersListExpanded;
+                newLayersListHeight()
+            });	
+			// apply new Layers List height if toggle layerstree
+			if (controlLayersElement) {
+				controlLayersElement.addEventListener('click', function(event) {
+					var toggleLayerHeaderPointer = event.target.closest('.leaflet-layerstree-header-pointer span');
+					if (toggleLayerHeaderPointer) {
+						newLayersListHeight();
+					}
+				});
+			}
+            // Collapsed/Expanded at Start to apply new height
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            // Collapsed touch/small screen
+            var isSmallScreen = window.innerWidth < 650;
+            if (isSmallScreen) {
+                setTimeout(function() {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                    isLayersListExpanded = !isLayersListExpanded;
+                }, 500);
+            }  
+        });       
+        setBounds();
+	function updateDashboardStats() {
+    var bounds = map.getBounds();
+    var pCount = 0; var wCount = 0; var woCount = 0;
+
+    map.eachLayer(function(layer) {
+        // Only look at layers that are currently checked in your legend
+        if (map.hasLayer(layer)) {
+            var name = (layer.options && layer.options.layerName) ? layer.options.layerName : "";
+            
+            // 1. COUNT PROTECTED PROPERTIES
+            if (name.includes('PropertiesProtectedbyReef')) {
+                if (layer.eachLayer) {
+                    layer.eachLayer(function(feature) {
+                        // For Polygons/Buildings, we get the center point
+                        var center = feature.getBounds ? feature.getBounds().getCenter() : (feature.getLatLng ? feature.getLatLng() : null);
+                        if (center && bounds.contains(center)) pCount++;
+                    });
+                }
+            }
+
+            // 2. COUNT WITH REEF
+            if (name.includes('PropertiesReef') && !name.includes('Protected')) {
+                if (layer.eachLayer) {
+                    layer.eachLayer(function(feature) {
+                        var center = feature.getBounds ? feature.getBounds().getCenter() : (feature.getLatLng ? feature.getLatLng() : null);
+                        if (center && bounds.contains(center)) wCount++;
+                    });
+                }
+            }
+
+            // 3. COUNT WITHOUT REEF
+            if (name.includes('PropertiesNoReef')) {
+                if (layer.eachLayer) {
+                    layer.eachLayer(function(feature) {
+                        var center = feature.getBounds ? feature.getBounds().getCenter() : (feature.getLatLng ? feature.getLatLng() : null);
+                        if (center && bounds.contains(center)) woCount++;
+                    });
+                }
+            }
+        }
+    });
+
+    // Update the Big Dashboard Numbers
+    document.getElementById('count-protected').innerHTML = pCount.toLocaleString();
+    document.getElementById('count-with').innerHTML = wCount.toLocaleString();
+    document.getElementById('count-without').innerHTML = woCount.toLocaleString();
+}
+
+// Ensure the map listens for EVERYTHING: movements, zooms, and checkbox clicks
+map.on('moveend zoomend overlayadd overlayremove', function() {
+    updateDashboardStats();
+});
+
+// Run once immediately so it doesn't start at 0
+setTimeout(updateDashboardStats, 1500);
+        </script>        
+    </body>
+</html>
